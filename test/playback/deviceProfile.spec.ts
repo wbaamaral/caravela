@@ -280,10 +280,24 @@ describe('buildDeviceProfile', () => {
     });
 
     it("leaves the transcoding profiles' channels to the codec profiles", () => {
-      const profile = buildDeviceProfile({isTypeSupported: () => true});
+      const profile = buildDeviceProfile({
+        isTypeSupported: () => true,
+        maxAudioChannels: 8,
+      });
       for (const p of profile.TranscodingProfiles ?? []) {
         expect(p.MaxAudioChannels).toBeUndefined();
       }
+    });
+
+    it('caps the HLS video profiles too below 8 channels (E-AC-3 copy)', () => {
+      const profile = buildDeviceProfile({
+        isTypeSupported: () => true,
+        maxAudioChannels: 2,
+      });
+      const [ts, fmp4, audio] = profile.TranscodingProfiles ?? [];
+      expect(ts.MaxAudioChannels).toBe('2');
+      expect(fmp4.MaxAudioChannels).toBe('2');
+      expect(audio.MaxAudioChannels).toBeUndefined();
     });
   });
 
@@ -300,7 +314,10 @@ describe('buildDeviceProfile', () => {
     });
 
     it('offers HLS in TS and fMP4, with HEVC in fMP4 only', () => {
-      const profile = buildDeviceProfile({isTypeSupported: () => true});
+      const profile = buildDeviceProfile({
+        isTypeSupported: () => true,
+        maxAudioChannels: 8,
+      });
       const [ts, fmp4, audio] = profile.TranscodingProfiles ?? [];
       const common = {
         Type: 'Video',

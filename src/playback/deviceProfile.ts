@@ -568,6 +568,12 @@ export function createDeviceProfile(
     // The app fetches text subtitles as WebVTT and draws them itself, so Shaka
     // must not load them from the manifest.
     EnableSubtitlesInManifest: false,
+    // The codec profiles' channel cap reaches the stream URL for AAC only
+    // (`aac-audiochannels`), so the server still copies 5.1 E-AC-3. The
+    // profile's own cap applies to every codec.
+    ...(maxAudioChannels < 8
+      ? {MaxAudioChannels: String(maxAudioChannels)}
+      : {}),
   });
 
   return {
