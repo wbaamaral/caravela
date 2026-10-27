@@ -247,6 +247,17 @@ describe('buildDeviceProfile', () => {
       ]);
     });
 
+    it('caps every codec, AAC included, at a lower maxAudioChannels', () => {
+      const profile = buildDeviceProfile({
+        isTypeSupported: () => true,
+        maxAudioChannels: 2,
+      });
+      expect(audioProfiles(profile)).toEqual([
+        {Type: 'VideoAudio', Conditions: atMost('2')},
+        {Type: 'VideoAudio', Codec: 'aac', Conditions: atMost('2')},
+      ]);
+    });
+
     it('limits only AAC: no other codec has its own channel profile', () => {
       const profile = buildDeviceProfile({isTypeSupported: () => true});
       const codecs = audioProfiles(profile).map((p) => p.Codec);

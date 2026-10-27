@@ -17,6 +17,9 @@ import {VideoRangeType} from '@jellyfin/sdk/lib/generated-client/models/video-ra
 /** Same as androidtv's default "Max streaming bitrate" (100 Mbit/s). */
 export const DEFAULT_MAX_BITRATE = 100_000_000;
 
+/** Up to 7.1; 2 makes the server downmix to stereo. */
+export const DEFAULT_MAX_AUDIO_CHANNELS = 8;
+
 export type IsTypeSupported = (type: string) => boolean;
 
 /**
@@ -271,7 +274,10 @@ const videoCodecProfile = (
 const {Equals, NotEquals, LessThanEqual, GreaterThanEqual, EqualsAny} =
   ProfileConditionType;
 
-function codecProfiles(caps: DeviceCapabilities): CodecProfile[] {
+function codecProfiles(
+  caps: DeviceCapabilities,
+  maxAudioChannels: number,
+): CodecProfile[] {
   const profiles: CodecProfile[] = [];
   const avcProfiles = ['high', 'main', 'baseline', 'constrained baseline'];
 
@@ -403,11 +409,16 @@ function codecProfiles(caps: DeviceCapabilities): CodecProfile[] {
     profiles.push(rangeTypeProfile('hevc', hevcUnsupported));
   }
 
-  // Audio channels (no downmix setting yet)
+  // Audio channels. Below the source's count, the server can't copy the
+  // track and transcodes it with its downmix algorithm.
   profiles.push({
     Type: CodecType.VideoAudio,
     Conditions: [
-      condition(LessThanEqual, ProfileConditionValue.AudioChannels, 8),
+      condition(
+        LessThanEqual,
+        ProfileConditionValue.AudioChannels,
+        maxAudioChannels,
+      ),
     ],
   });
   // 7.1 AAC: the Fire TV's AAC parser rejects it ("Not a known sample
@@ -419,7 +430,11 @@ function codecProfiles(caps: DeviceCapabilities): CodecProfile[] {
     Type: CodecType.VideoAudio,
     Codec: 'aac',
     Conditions: [
-      condition(LessThanEqual, ProfileConditionValue.AudioChannels, 6),
+      condition(
+        LessThanEqual,
+        ProfileConditionValue.AudioChannels,
+        Math.min(6, maxAudioChannels),
+      ),
     ],
   });
 
@@ -506,6 +521,7 @@ function subtitleProfiles(): SubtitleProfile[] {
 export function createDeviceProfile(
   caps: DeviceCapabilities,
   maxBitrate: number = DEFAULT_MAX_BITRATE,
+  maxAudioChannels: number = DEFAULT_MAX_AUDIO_CHANNELS,
 ): DeviceProfile {
   const audioCodecs = AUDIO_CODECS.filter(([probe]) => caps[probe]).flatMap(
     ([, names]) => names,
@@ -571,7 +587,7 @@ export function createDeviceProfile(
       },
     ],
     ContainerProfiles: [],
-    CodecProfiles: codecProfiles(caps),
+    CodecProfiles: codecProfiles(caps, maxAudioChannels),
     SubtitleProfiles: subtitleProfiles(),
   };
 }
@@ -581,6 +597,8 @@ export type DeviceProfileOptions = {
   isTypeSupported?: IsTypeSupported;
   /** In bits per second; defaults to {@link DEFAULT_MAX_BITRATE}. */
   maxStreamingBitrate?: number;
+  /** Defaults to {@link DEFAULT_MAX_AUDIO_CHANNELS}. */
+  maxAudioChannels?: number;
 };
 
 const vegaProbe: IsTypeSupported = (type) =>
@@ -608,9 +626,9 @@ export function getDeviceCapabilities(): DeviceCapabilities {
 export function buildDeviceProfile(
   options: DeviceProfileOptions = {},
 ): DeviceProfile {
-  const {isTypeSupported, maxStreamingBitrate} = options;
+  const {isTypeSupported, maxStreamingBitrate, maxAudioChannels} = options;
   const caps = isTypeSupported
     ? probeCapabilities(isTypeSupported)
     : getDeviceCapabilities();
-  return createDeviceProfile(caps, maxStreamingBitrate);
+  return createDeviceProfile(caps, maxStreamingBitrate, maxAudioChannels);
 }
