@@ -240,19 +240,8 @@ describe('buildDeviceProfile', () => {
       },
     ];
 
-    it('defaults to stereo, so the server downmixes 5.1 for a 2.0 TV', () => {
-      expect(audioProfiles(profileFor('aac', 'eac3', 'ac3'))).toEqual([
-        {Type: 'VideoAudio', Conditions: atMost('2')},
-        {Type: 'VideoAudio', Codec: 'aac', Conditions: atMost('2')},
-      ]);
-    });
-
     it('caps every codec at 8 and AAC at 6 (the TV fails on 7.1 AAC)', () => {
-      const profile = buildDeviceProfile({
-        isTypeSupported: supporting('aac', 'eac3', 'ac3'),
-        maxAudioChannels: 8,
-      });
-      expect(audioProfiles(profile)).toEqual([
+      expect(audioProfiles(profileFor('aac', 'eac3', 'ac3'))).toEqual([
         {Type: 'VideoAudio', Conditions: atMost('8')},
         {Type: 'VideoAudio', Codec: 'aac', Conditions: atMost('6')},
       ]);
