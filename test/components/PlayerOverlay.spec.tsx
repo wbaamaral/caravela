@@ -47,6 +47,7 @@ const callbacks = () => ({
   onAudio: jest.fn(),
   onChapters: jest.fn(),
   onSpeed: jest.fn(),
+  onQuality: jest.fn(),
   onAudioMode: jest.fn(),
   onZoom: jest.fn(),
   onScrubbingChange: jest.fn(),
@@ -129,6 +130,7 @@ describe('PlayerOverlay', () => {
       expect(buttonIds(view, 'secondary')).toEqual([
         `${ID}-chapters`,
         `${ID}-speed`,
+        `${ID}-quality`,
         `${ID}-audiomode`,
         `${ID}-zoom`,
       ]);
@@ -147,6 +149,7 @@ describe('PlayerOverlay', () => {
       ]);
       expect(buttonIds(view, 'secondary')).toEqual([
         `${ID}-speed`,
+        `${ID}-quality`,
         `${ID}-audiomode`,
         `${ID}-zoom`,
       ]);

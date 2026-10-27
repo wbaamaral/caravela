@@ -6,7 +6,13 @@ import {
   Stop,
   Svg,
 } from '@amazon-devices/react-native-svg';
-import React, {memo, type RefObject, useCallback, useRef, useState} from 'react';
+import React, {
+  memo,
+  type RefObject,
+  useCallback,
+  useRef,
+  useState,
+} from 'react';
 import {
   findNodeHandle,
   type LayoutChangeEvent,
@@ -31,6 +37,7 @@ export type OverlayFocus =
   | 'audio'
   | 'chapters'
   | 'speed'
+  | 'quality'
   | 'audiomode'
   | 'zoom';
 
@@ -63,6 +70,8 @@ export type PlayerOverlayProps = {
   onAudio: () => void;
   onChapters: () => void;
   onSpeed: () => void;
+  /** The bitrate cap (Settings › Playback › Max streaming bitrate). */
+  onQuality: () => void;
   /** Direct or stereo downmix (Settings › Playback › Audio). */
   onAudioMode: () => void;
   onZoom: () => void;
@@ -253,6 +262,7 @@ export const PlayerOverlay = ({
   onAudio,
   onChapters,
   onSpeed,
+  onQuality,
   onAudioMode,
   onZoom,
   onScrubbingChange,
@@ -290,7 +300,12 @@ export const PlayerOverlay = ({
     });
   }
   if (hasAudio) {
-    primary.push({key: 'audio', icon: 'audio', label: 'Audio', onPress: onAudio});
+    primary.push({
+      key: 'audio',
+      icon: 'audio',
+      label: 'Audio',
+      onPress: onAudio,
+    });
   }
   const secondary: ButtonSpec[] = [];
   if (hasChapters) {
@@ -303,6 +318,7 @@ export const PlayerOverlay = ({
   }
   secondary.push(
     {key: 'speed', icon: 'speed', label: 'Playback speed', onPress: onSpeed},
+    {key: 'quality', icon: 'quality', label: 'Quality', onPress: onQuality},
     {
       key: 'audiomode',
       icon: 'audiomode',

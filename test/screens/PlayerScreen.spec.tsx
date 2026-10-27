@@ -2205,7 +2205,7 @@ describe('PlayerScreen tracks', () => {
     });
   });
 
-  describe('audio mode', () => {
+  describe('audio mode and quality', () => {
     afterEach(async () => {
       // The app-wide store outlives a test.
       await getSettingsStore().setAudioBehavior('direct');
@@ -2251,6 +2251,50 @@ describe('PlayerScreen tracks', () => {
       expect(jest.mocked(resolvePlayback).mock.calls.at(-1)![1]).toMatchObject({
         maxAudioChannels: 2,
       });
+    });
+
+    it('saves a bitrate from the Quality menu and resolves again with it', async () => {
+      await renderPaused();
+      fireEvent.press(screen.getByTestId('player-overlay-quality'));
+      const labels = screen
+        .getAllByRole('radio')
+        .map((row) => row.props.accessibilityLabel);
+      expect(labels[0]).toBe('120 Mbps');
+      const current = labels.indexOf('100 Mbps');
+      expect(
+        screen.getByTestId(`player-quality-picker-row-${current}-check`),
+      ).toBeTruthy();
+
+      const resolves = jest.mocked(resolvePlayback).mock.calls.length;
+      const threeMbps = labels.indexOf('3 Mbps');
+      fireEvent.press(
+        screen.getByTestId(`player-quality-picker-row-${threeMbps}`),
+      );
+      await flush();
+      expect(screen.queryByTestId('player-quality-picker')).toBeNull();
+      expect(getSettingsStore().current().maxStreamingBitrate).toBe(3_000_000);
+      expect(jest.mocked(resolvePlayback).mock.calls).toHaveLength(
+        resolves + 1,
+      );
+      expect(jest.mocked(resolvePlayback).mock.calls.at(-1)![1]).toMatchObject({
+        maxStreamingBitrate: 3_000_000,
+      });
+    });
+
+    it('keeps playing when the picked bitrate is the current one', async () => {
+      await renderPaused();
+      const resolves = jest.mocked(resolvePlayback).mock.calls.length;
+      fireEvent.press(screen.getByTestId('player-overlay-quality'));
+      const labels = screen
+        .getAllByRole('radio')
+        .map((row) => row.props.accessibilityLabel);
+      fireEvent.press(
+        screen.getByTestId(
+          `player-quality-picker-row-${labels.indexOf('100 Mbps')}`,
+        ),
+      );
+      await flush();
+      expect(jest.mocked(resolvePlayback).mock.calls).toHaveLength(resolves);
     });
 
     it('does nothing when the current mode is picked again', async () => {

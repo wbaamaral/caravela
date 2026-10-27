@@ -46,6 +46,8 @@ import {
 import {
   AUDIO_BEHAVIORS,
   type AudioBehavior,
+  MAX_BITRATES,
+  bitrateLabel,
   getSettingsStore,
   maxAudioChannelsFor,
 } from '../settings/store';
@@ -94,7 +96,13 @@ type Tracks = {
   subtitleIndex: number;
 };
 
-type PickerKind = 'audio' | 'subtitles' | 'speed' | 'audiomode' | 'zoom';
+type PickerKind =
+  | 'audio'
+  | 'subtitles'
+  | 'speed'
+  | 'quality'
+  | 'audiomode'
+  | 'zoom';
 /** What sits over the overlay; each is also the button it opened from. */
 type Popup = PickerKind | 'chapters';
 
@@ -132,6 +140,11 @@ const ZOOM_TRACKS: MediaTrack[] = ZOOM_MODES.map(({label}, index) => ({
 const AUDIO_MODE_TRACKS: MediaTrack[] = AUDIO_BEHAVIORS.map(
   ({label}, index) => ({index, label}),
 );
+
+const QUALITY_TRACKS: MediaTrack[] = MAX_BITRATES.map((bps, index) => ({
+  index,
+  label: bitrateLabel(bps),
+}));
 
 /**
  * The speed last picked, for the app's lifetime (androidtv's
@@ -216,9 +229,12 @@ export const PlayerScreen = ({route, navigation}: PlayerProps) => {
   const [speed, setSpeed] = useState<PlaybackSpeed>(speedSelection);
   // Each visit starts at Fit (androidtv doesn't keep the zoom).
   const [zoom, setZoom] = useState(0);
-  // The saved setting; picking one here saves it too.
+  // The saved settings; picking one here saves it too.
   const [audioBehavior, setAudioBehavior] = useState<AudioBehavior>(
     () => getSettingsStore().current().audioBehavior,
+  );
+  const [maxBitrate, setMaxBitrate] = useState(
+    () => getSettingsStore().current().maxStreamingBitrate,
   );
   const [scrubbing, setScrubbing] = useState(false);
   /** The top of the overlay's controls, for lifting subtitles above it. */
@@ -545,6 +561,7 @@ export const PlayerScreen = ({route, navigation}: PlayerProps) => {
   const openSpeed = useCallback(() => setPopup('speed'), []);
   const openZoom = useCallback(() => setPopup('zoom'), []);
   const openAudioMode = useCallback(() => setPopup('audiomode'), []);
+  const openQuality = useCallback(() => setPopup('quality'), []);
 
   const chapters = useMemo(
     () => (api && item ? itemChapters(api, item) : NO_CHAPTERS),
@@ -724,10 +741,26 @@ export const PlayerScreen = ({route, navigation}: PlayerProps) => {
   };
 
   /**
-   * Saves the choice (it's the Settings one), then resolves again with the
-   * same tracks: the new profile's channel cap decides copy or downmix. The
-   * resolve reads the store's value, which the save sets before it resolves.
+   * Saves a Settings choice picked here, then resolves again with the same
+   * tracks, so the server applies it (copy or downmix, the bitrate cap). The
+   * resolve reads the store's values, which the save sets before it resolves.
+   * A failed save puts the picker back on the saved value.
    */
+  const saveAndReload = (save: Promise<void>, revert: () => void) => {
+    save.then(
+      () => {
+        const current = tracksRef.current;
+        if (current) {
+          reloadRef.current(current);
+        }
+      },
+      (reason) => {
+        console.warn('Saving the playback setting failed', reason);
+        revert();
+      },
+    );
+  };
+
   const pickAudioMode = (index: number) => {
     closePopup();
     const next = AUDIO_BEHAVIORS[index]?.value;
@@ -735,20 +768,21 @@ export const PlayerScreen = ({route, navigation}: PlayerProps) => {
       return;
     }
     setAudioBehavior(next);
-    getSettingsStore()
-      .setAudioBehavior(next)
-      .then(
-        () => {
-          const current = tracksRef.current;
-          if (current) {
-            reloadRef.current(current);
-          }
-        },
-        (reason) => {
-          console.warn('Saving the audio setting failed', reason);
-          setAudioBehavior(getSettingsStore().current().audioBehavior);
-        },
-      );
+    saveAndReload(getSettingsStore().setAudioBehavior(next), () =>
+      setAudioBehavior(getSettingsStore().current().audioBehavior),
+    );
+  };
+
+  const pickQuality = (index: number) => {
+    closePopup();
+    const next = MAX_BITRATES[index];
+    if (next === undefined || next === maxBitrate) {
+      return;
+    }
+    setMaxBitrate(next);
+    saveAndReload(getSettingsStore().setMaxStreamingBitrate(next), () =>
+      setMaxBitrate(getSettingsStore().current().maxStreamingBitrate),
+    );
   };
 
   const chaptersOpen = overlayShown && popup === 'chapters';
@@ -831,6 +865,7 @@ export const PlayerScreen = ({route, navigation}: PlayerProps) => {
           onAudio={openAudio}
           onChapters={openChapters}
           onSpeed={openSpeed}
+          onQuality={openQuality}
           onAudioMode={openAudioMode}
           onZoom={openZoom}
           onScrubbingChange={setScrubbing}
@@ -875,6 +910,16 @@ export const PlayerScreen = ({route, navigation}: PlayerProps) => {
           tracks={SPEED_TRACKS}
           selectedIndex={PLAYBACK_SPEEDS.indexOf(speed)}
           onSelect={pickSpeed}
+          onClose={closePopup}
+        />
+      )}
+      {overlayShown && popup === 'quality' && (
+        <TrackPicker
+          testID="player-quality-picker"
+          title="Max streaming bitrate"
+          tracks={QUALITY_TRACKS}
+          selectedIndex={MAX_BITRATES.indexOf(maxBitrate)}
+          onSelect={pickQuality}
           onClose={closePopup}
         />
       )}
