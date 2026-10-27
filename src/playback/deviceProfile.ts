@@ -576,14 +576,19 @@ export function createDeviceProfile(
       : {}),
   });
 
+  // The server takes the first video profile, so fMP4 leads when the device
+  // decodes HEVC: it gets HEVC (sharper at the same bitrate) in segments
+  // Shaka plays without transmuxing. Without HEVC, TS stays first.
+  const ts = hlsVideo('ts', HLS_TS_AUDIO);
+  const fmp4 = hlsVideo('mp4', HLS_FMP4_AUDIO);
+
   return {
     Name: 'Caravela',
     MaxStaticBitrate: maxBitrate,
     MaxStreamingBitrate: maxBitrate,
     DirectPlayProfiles: directPlayProfiles,
     TranscodingProfiles: [
-      hlsVideo('ts', HLS_TS_AUDIO),
-      hlsVideo('mp4', HLS_FMP4_AUDIO),
+      ...(caps.hevc ? [fmp4, ts] : [ts, fmp4]),
       {
         Type: DlnaProfileType.Audio,
         Context: EncodingContext.Streaming,

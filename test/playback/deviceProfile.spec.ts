@@ -283,7 +283,7 @@ describe('buildDeviceProfile', () => {
         isTypeSupported: () => true,
         maxAudioChannels: 2,
       });
-      const [ts, fmp4, audio] = profile.TranscodingProfiles ?? [];
+      const [fmp4, ts, audio] = profile.TranscodingProfiles ?? [];
       expect(ts.MaxAudioChannels).toBe('2');
       expect(fmp4.MaxAudioChannels).toBe('2');
       expect(audio.MaxAudioChannels).toBeUndefined();
@@ -302,12 +302,12 @@ describe('buildDeviceProfile', () => {
       }
     });
 
-    it('offers HLS in TS and fMP4, with HEVC in fMP4 only', () => {
+    it('puts fMP4 (with HEVC) first, then TS (H.264 only) with HEVC', () => {
       const profile = buildDeviceProfile({
         isTypeSupported: () => true,
         maxAudioChannels: 8,
       });
-      const [ts, fmp4, audio] = profile.TranscodingProfiles ?? [];
+      const [fmp4, ts, audio] = profile.TranscodingProfiles ?? [];
       const common = {
         Type: 'Video',
         Context: 'Streaming',
@@ -336,10 +336,18 @@ describe('buildDeviceProfile', () => {
       });
     });
 
-    it('uses only H.264 and the supported audio otherwise', () => {
+    it('keeps TS first, with only H.264 and the supported audio, otherwise', () => {
       const [ts, fmp4] = profileFor('h264', 'aac', 'ac3').TranscodingProfiles!;
-      expect(ts).toMatchObject({VideoCodec: 'h264', AudioCodec: 'aac,ac3'});
-      expect(fmp4).toMatchObject({VideoCodec: 'h264', AudioCodec: 'aac,ac3'});
+      expect(ts).toMatchObject({
+        Container: 'ts',
+        VideoCodec: 'h264',
+        AudioCodec: 'aac,ac3',
+      });
+      expect(fmp4).toMatchObject({
+        Container: 'mp4',
+        VideoCodec: 'h264',
+        AudioCodec: 'aac,ac3',
+      });
     });
   });
 
