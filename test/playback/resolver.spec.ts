@@ -239,6 +239,14 @@ describe('resolvePlayback', () => {
     });
   });
 
+  it('passes the audio channel cap to the profile (stereo downmix)', async () => {
+    await resolvePlayback(api, {...REQUEST, maxAudioChannels: 2});
+    expect(buildDeviceProfile).toHaveBeenCalledWith({
+      maxStreamingBitrate: DEFAULT_MAX_BITRATE,
+      maxAudioChannels: 2,
+    });
+  });
+
   it('sends a custom bitrate cap with a given profile and keeps it on the session', async () => {
     respond({MediaSources: [HLS_SOURCE], PlaySessionId: 's'});
     const result = await resolvePlayback(api, {

@@ -43,6 +43,12 @@ import {
   type PlayerTitle,
   type ZoomMode,
 } from '../playback/types';
+import {
+  AUDIO_BEHAVIORS,
+  type AudioBehavior,
+  getSettingsStore,
+  maxAudioChannelsFor,
+} from '../settings/store';
 import {colors, layout, spacing, typography} from '../theme';
 import {
   createPositionFeed,
@@ -88,7 +94,7 @@ type Tracks = {
   subtitleIndex: number;
 };
 
-type PickerKind = 'audio' | 'subtitles' | 'speed' | 'zoom';
+type PickerKind = 'audio' | 'subtitles' | 'speed' | 'audiomode' | 'zoom';
 /** What sits over the overlay; each is also the button it opened from. */
 type Popup = PickerKind | 'chapters';
 
@@ -122,6 +128,10 @@ const ZOOM_TRACKS: MediaTrack[] = ZOOM_MODES.map(({label}, index) => ({
   index,
   label,
 }));
+
+const AUDIO_MODE_TRACKS: MediaTrack[] = AUDIO_BEHAVIORS.map(
+  ({label}, index) => ({index, label}),
+);
 
 /**
  * The speed last picked, for the app's lifetime (androidtv's
@@ -206,6 +216,10 @@ export const PlayerScreen = ({route, navigation}: PlayerProps) => {
   const [speed, setSpeed] = useState<PlaybackSpeed>(speedSelection);
   // Each visit starts at Fit (androidtv doesn't keep the zoom).
   const [zoom, setZoom] = useState(0);
+  // The saved setting; picking one here saves it too.
+  const [audioBehavior, setAudioBehavior] = useState<AudioBehavior>(
+    () => getSettingsStore().current().audioBehavior,
+  );
   const [scrubbing, setScrubbing] = useState(false);
   /** The top of the overlay's controls, for lifting subtitles above it. */
   const [controlsTop, setControlsTop] = useState<number>();
@@ -243,11 +257,15 @@ export const PlayerScreen = ({route, navigation}: PlayerProps) => {
     }
     let cancelled = false;
     setPhase({kind: 'resolving'});
+    const behavior = getSettingsStore().current().audioBehavior;
     const request: PlaybackRequest = {
       itemId,
       userId,
       startMs: resumeFromRef.current,
       ...choiceRef.current,
+      ...(behavior === 'downmix' && {
+        maxAudioChannels: maxAudioChannelsFor(behavior),
+      }),
     };
     const startPaused = startPausedRef.current;
     startPausedRef.current = false;
@@ -523,6 +541,7 @@ export const PlayerScreen = ({route, navigation}: PlayerProps) => {
   const openSubtitles = useCallback(() => setPopup('subtitles'), []);
   const openSpeed = useCallback(() => setPopup('speed'), []);
   const openZoom = useCallback(() => setPopup('zoom'), []);
+  const openAudioMode = useCallback(() => setPopup('audiomode'), []);
 
   const chapters = useMemo(
     () => (api && item ? itemChapters(api, item) : NO_CHAPTERS),
@@ -704,6 +723,34 @@ export const PlayerScreen = ({route, navigation}: PlayerProps) => {
     }
   };
 
+  /**
+   * Saves the choice (it's the Settings one), then resolves again with the
+   * same tracks: the new profile's channel cap decides copy or downmix. The
+   * resolve reads the store's value, which the save sets before it resolves.
+   */
+  const pickAudioMode = (index: number) => {
+    closePopup();
+    const next = AUDIO_BEHAVIORS[index]?.value;
+    if (next === undefined || next === audioBehavior) {
+      return;
+    }
+    setAudioBehavior(next);
+    getSettingsStore()
+      .setAudioBehavior(next)
+      .then(
+        () => {
+          const current = tracksRef.current;
+          if (current) {
+            reloadRef.current(current);
+          }
+        },
+        (reason) => {
+          console.warn('Saving the audio setting failed', reason);
+          setAudioBehavior(getSettingsStore().current().audioBehavior);
+        },
+      );
+  };
+
   const chaptersOpen = overlayShown && popup === 'chapters';
 
   return (
@@ -784,6 +831,7 @@ export const PlayerScreen = ({route, navigation}: PlayerProps) => {
           onAudio={openAudio}
           onChapters={openChapters}
           onSpeed={openSpeed}
+          onAudioMode={openAudioMode}
           onZoom={openZoom}
           onScrubbingChange={setScrubbing}
           onActivity={overlay.onActivity}
@@ -827,6 +875,18 @@ export const PlayerScreen = ({route, navigation}: PlayerProps) => {
           tracks={SPEED_TRACKS}
           selectedIndex={PLAYBACK_SPEEDS.indexOf(speed)}
           onSelect={pickSpeed}
+          onClose={closePopup}
+        />
+      )}
+      {overlayShown && popup === 'audiomode' && (
+        <TrackPicker
+          testID="player-audio-mode-picker"
+          title="Audio mode"
+          tracks={AUDIO_MODE_TRACKS}
+          selectedIndex={AUDIO_BEHAVIORS.findIndex(
+            ({value}) => value === audioBehavior,
+          )}
+          onSelect={pickAudioMode}
           onClose={closePopup}
         />
       )}

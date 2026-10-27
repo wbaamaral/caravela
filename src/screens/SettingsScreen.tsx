@@ -8,6 +8,8 @@ import {getAuthStore} from '../auth/store';
 import type {AuthStore, AutoLogin} from '../auth/store';
 import {FocusableButton} from '../components/FocusableButton';
 import type {RootStackParamList} from '../navigation/types';
+import {AUDIO_BEHAVIORS, getSettingsStore} from '../settings/store';
+import type {AudioBehavior, SettingsStore} from '../settings/store';
 import {colors, spacing, typography} from '../theme';
 import {ScreenContainer} from './ScreenContainer';
 
@@ -25,15 +27,26 @@ export const autoLoginKey = (value: AutoLogin) =>
     : value.mode;
 
 type SettingsScreenProps = {
-  /** Injected in tests; the app uses the default store. */
+  /** Injected in tests; the app uses the default stores. */
   authStore?: AuthStore;
+  settingsStore?: SettingsStore;
 };
 
-export const SettingsScreen = ({authStore}: SettingsScreenProps) => {
+export const SettingsScreen = ({
+  authStore,
+  settingsStore,
+}: SettingsScreenProps) => {
   const {session, switchUser, signOut} = useSession();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [store] = useState(() => authStore ?? getAuthStore());
+  const [settings] = useState(() => settingsStore ?? getSettingsStore());
+  const [audioBehavior, setAudioBehavior] = useState<AudioBehavior>(
+    () => settings.current().audioBehavior,
+  );
+  const [audioError, setAudioError] = useState<string>();
+  // As for auto-login: only the latest save may revert the selection.
+  const audioSaveCount = useRef(0);
 
   const [selected, setSelected] = useState<AutoLogin>();
   // A saved specificUser for someone other than the current user.
@@ -114,6 +127,45 @@ export const SettingsScreen = ({authStore}: SettingsScreenProps) => {
       }
     },
     [store],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    settings.load().then(
+      (loaded) => {
+        if (!cancelled) {
+          setAudioBehavior(loaded.audioBehavior);
+        }
+      },
+      (reason) => {
+        console.warn('Loading the audio setting failed', reason);
+        if (!cancelled) {
+          setAudioError("Couldn't load the setting.");
+        }
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [settings]);
+
+  const saveAudioBehavior = useCallback(
+    async (value: AudioBehavior) => {
+      const save = ++audioSaveCount.current;
+      const previous = settings.current().audioBehavior;
+      setAudioBehavior(value);
+      setAudioError(undefined);
+      try {
+        await settings.setAudioBehavior(value);
+      } catch (reason) {
+        console.warn('Saving the audio setting failed', reason);
+        if (mounted.current && save === audioSaveCount.current) {
+          setAudioBehavior(previous);
+          setAudioError("Couldn't save the setting.");
+        }
+      }
+    },
+    [settings],
   );
 
   const onSignOut = useCallback(async () => {
@@ -211,6 +263,27 @@ export const SettingsScreen = ({authStore}: SettingsScreenProps) => {
       {error ? (
         <Text style={styles.error} testID="settings-error">
           {error}
+        </Text>
+      ) : null}
+
+      <Text style={styles.heading}>Playback</Text>
+      <Text style={styles.label}>Audio</Text>
+      <View style={styles.row} testID="settings-audio">
+        {AUDIO_BEHAVIORS.map((option, index) => (
+          <React.Fragment key={option.value}>
+            {index > 0 ? <View style={styles.gap} /> : null}
+            <FocusableButton
+              testID={`settings-audio-${option.value}`}
+              label={option.label}
+              active={option.value === audioBehavior}
+              onPress={() => saveAudioBehavior(option.value)}
+            />
+          </React.Fragment>
+        ))}
+      </View>
+      {audioError ? (
+        <Text style={styles.error} testID="settings-audio-error">
+          {audioError}
         </Text>
       ) : null}
 

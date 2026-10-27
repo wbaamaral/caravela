@@ -28,9 +28,11 @@ export type PlaybackRequest = {
   subtitleStreamIndex?: number;
   /** In bits per second; defaults to `DEFAULT_MAX_BITRATE`. */
   maxStreamingBitrate?: number;
+  /** 2 has the server downmix to stereo; defaults to the profile's cap. */
+  maxAudioChannels?: number;
   /** Burn in the subtitle when the server transcodes (androidtv's option). */
   alwaysBurnInSubtitleWhenTranscoding?: boolean;
-  /** Defaults to `buildDeviceProfile({maxStreamingBitrate})`. */
+  /** Defaults to `buildDeviceProfile({maxStreamingBitrate, maxAudioChannels})`. */
   deviceProfile?: DeviceProfile;
 };
 
@@ -186,7 +188,13 @@ export async function resolvePlayback(
       MediaSourceId: mediaSourceId,
       StartTimeTicks: msToTicks(request.startMs),
       DeviceProfile:
-        request.deviceProfile ?? buildDeviceProfile({maxStreamingBitrate}),
+        request.deviceProfile ??
+        buildDeviceProfile({
+          maxStreamingBitrate,
+          ...(request.maxAudioChannels !== undefined && {
+            maxAudioChannels: request.maxAudioChannels,
+          }),
+        }),
       MaxStreamingBitrate: maxStreamingBitrate,
       EnableDirectPlay: true,
       EnableDirectStream: true,

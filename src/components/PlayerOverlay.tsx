@@ -31,6 +31,7 @@ export type OverlayFocus =
   | 'audio'
   | 'chapters'
   | 'speed'
+  | 'audiomode'
   | 'zoom';
 
 type ButtonKey = Exclude<OverlayFocus, 'seek'>;
@@ -62,6 +63,8 @@ export type PlayerOverlayProps = {
   onAudio: () => void;
   onChapters: () => void;
   onSpeed: () => void;
+  /** Direct or stereo downmix (Settings › Playback › Audio). */
+  onAudioMode: () => void;
   onZoom: () => void;
   onScrubbingChange?: (scrubbing: boolean) => void;
   /** A key the seek bar handled, or focus moving inside the overlay. */
@@ -250,6 +253,7 @@ export const PlayerOverlay = ({
   onAudio,
   onChapters,
   onSpeed,
+  onAudioMode,
   onZoom,
   onScrubbingChange,
   onActivity,
@@ -299,6 +303,12 @@ export const PlayerOverlay = ({
   }
   secondary.push(
     {key: 'speed', icon: 'speed', label: 'Playback speed', onPress: onSpeed},
+    {
+      key: 'audiomode',
+      icon: 'audiomode',
+      label: 'Audio mode',
+      onPress: onAudioMode,
+    },
     {key: 'zoom', icon: 'zoom', label: 'Zoom', onPress: onZoom},
   );
 

@@ -3,8 +3,13 @@ import React from 'react';
 
 import type {SessionContextValue} from '../src/auth/SessionContext';
 import {useSession} from '../src/auth/SessionContext';
-import type {AuthState, AutoLogin} from '../src/auth/store';
+import type {AuthState, AutoLogin, KeyValueStorage} from '../src/auth/store';
 import {SettingsScreen} from '../src/screens/SettingsScreen';
+import {
+  STORAGE_KEY as SETTINGS_KEY,
+  createSettingsStore,
+} from '../src/settings/store';
+import type {AudioBehavior, SettingsStore} from '../src/settings/store';
 import {
   HOME,
   fakeStore,
@@ -299,6 +304,72 @@ describe('SettingsScreen', () => {
     expect(activeOptions()).toEqual([]);
     expect(screen.getByTestId('settings-error')).toHaveTextContent(
       "Couldn't load the setting.",
+    );
+  });
+});
+
+describe('SettingsScreen audio behavior', () => {
+  const memorySettings = (saved?: AudioBehavior) => {
+    const data = new Map<string, string>();
+    if (saved) {
+      data.set(SETTINGS_KEY, JSON.stringify({audioBehavior: saved}));
+    }
+    const storage: KeyValueStorage = {
+      getItem: async (key) => data.get(key) ?? null,
+      setItem: jest.fn(async (key: string, value: string) => {
+        data.set(key, value);
+      }),
+      removeItem: async (key) => {
+        data.delete(key);
+      },
+    };
+    return {storage, store: createSettingsStore(storage)};
+  };
+
+  const renderWith = async (settingsStore: SettingsStore) => {
+    render(
+      <SettingsScreen
+        authStore={storeWith(signedInState())}
+        settingsStore={settingsStore}
+      />,
+    );
+    await act(async () => {});
+  };
+
+  const activeAudio = () =>
+    screen
+      .getAllByTestId(/^settings-audio-(direct|downmix)$/)
+      .filter((option) => option.props.accessibilityState?.selected)
+      .map((option) => option.props.testID);
+
+  it('offers Direct and Downmix to stereo, Direct by default', async () => {
+    await renderWith(memorySettings().store);
+    expect(screen.getByText('Playback')).toBeTruthy();
+    expect(screen.getByText('Downmix to stereo')).toBeTruthy();
+    expect(activeAudio()).toEqual(['settings-audio-direct']);
+  });
+
+  it('shows the saved choice', async () => {
+    await renderWith(memorySettings('downmix').store);
+    expect(activeAudio()).toEqual(['settings-audio-downmix']);
+  });
+
+  it('saves a new choice', async () => {
+    const {store} = memorySettings();
+    await renderWith(store);
+    await press('settings-audio-downmix');
+    expect(activeAudio()).toEqual(['settings-audio-downmix']);
+    expect(store.current().audioBehavior).toBe('downmix');
+  });
+
+  it('reverts the choice and says so when saving fails', async () => {
+    const {storage, store} = memorySettings();
+    jest.mocked(storage.setItem).mockRejectedValue(new Error('disk full'));
+    await renderWith(store);
+    await press('settings-audio-downmix');
+    expect(activeAudio()).toEqual(['settings-audio-direct']);
+    expect(screen.getByTestId('settings-audio-error')).toHaveTextContent(
+      "Couldn't save the setting.",
     );
   });
 });

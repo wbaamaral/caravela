@@ -47,6 +47,7 @@ const callbacks = () => ({
   onAudio: jest.fn(),
   onChapters: jest.fn(),
   onSpeed: jest.fn(),
+  onAudioMode: jest.fn(),
   onZoom: jest.fn(),
   onScrubbingChange: jest.fn(),
   onActivity: jest.fn(),
@@ -128,6 +129,7 @@ describe('PlayerOverlay', () => {
       expect(buttonIds(view, 'secondary')).toEqual([
         `${ID}-chapters`,
         `${ID}-speed`,
+        `${ID}-audiomode`,
         `${ID}-zoom`,
       ]);
     });
@@ -145,6 +147,7 @@ describe('PlayerOverlay', () => {
       ]);
       expect(buttonIds(view, 'secondary')).toEqual([
         `${ID}-speed`,
+        `${ID}-audiomode`,
         `${ID}-zoom`,
       ]);
     });
@@ -200,9 +203,9 @@ describe('PlayerOverlay', () => {
       expect(view.getByTestId(`${ID}-speed-label`)).toHaveTextContent(
         'Playback speed',
       );
-      expect(view.getByTestId(`${ID}-speed-icon`).props.children.props.fill).toBe(
-        colors.text,
-      );
+      expect(
+        view.getByTestId(`${ID}-speed-icon`).props.children.props.fill,
+      ).toBe(colors.text);
       expect(view.queryByTestId(`${ID}-zoom-label`)).toBeNull();
 
       act(() => fireEvent(view.getByTestId(`${ID}-speed`), 'blur'));

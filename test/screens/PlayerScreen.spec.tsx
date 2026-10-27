@@ -38,6 +38,7 @@ import type {
   PlaybackResolution,
   PlaybackSession,
 } from '../../src/playback/types';
+import {getSettingsStore} from '../../src/settings/store';
 import {px} from '../../src/theme';
 import {sessionFor} from '../auth/fakes';
 import type {
@@ -2199,6 +2200,47 @@ describe('PlayerScreen tracks', () => {
       await flush();
       await renderPaused();
       expect(surface().props.scalingmode).toBe('fit');
+    });
+  });
+
+  describe('audio mode', () => {
+    afterEach(async () => {
+      // The app-wide store outlives a test.
+      await getSettingsStore().setAudioBehavior('direct');
+    });
+
+    it('saves Downmix to stereo and resolves again with 2 channels', async () => {
+      await renderPaused();
+      expect(
+        jest.mocked(resolvePlayback).mock.calls.at(-1)![1],
+      ).not.toHaveProperty('maxAudioChannels');
+      fireEvent.press(screen.getByTestId('player-overlay-audiomode'));
+      expect(
+        screen.getAllByRole('radio').map((row) => row.props.accessibilityLabel),
+      ).toEqual(['Direct', 'Downmix to stereo']);
+      expect(
+        screen.getByTestId('player-audio-mode-picker-row-0-check'),
+      ).toBeTruthy();
+
+      const resolves = jest.mocked(resolvePlayback).mock.calls.length;
+      fireEvent.press(screen.getByTestId('player-audio-mode-picker-row-1'));
+      await flush();
+      expect(getSettingsStore().current().audioBehavior).toBe('downmix');
+      expect(jest.mocked(resolvePlayback).mock.calls).toHaveLength(
+        resolves + 1,
+      );
+      expect(jest.mocked(resolvePlayback).mock.calls.at(-1)![1]).toMatchObject({
+        maxAudioChannels: 2,
+      });
+    });
+
+    it('does nothing when the current mode is picked again', async () => {
+      await renderPaused();
+      const resolves = jest.mocked(resolvePlayback).mock.calls.length;
+      fireEvent.press(screen.getByTestId('player-overlay-audiomode'));
+      fireEvent.press(screen.getByTestId('player-audio-mode-picker-row-0'));
+      await flush();
+      expect(jest.mocked(resolvePlayback).mock.calls).toHaveLength(resolves);
     });
   });
 
