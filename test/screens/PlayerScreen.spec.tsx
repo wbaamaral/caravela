@@ -68,6 +68,8 @@ jest.mock('../../src/playback/audioOutput', () => ({
 }));
 
 jest.mock('../../src/playback/deviceProfile', () => ({
+  DEFAULT_MAX_BITRATE: 100_000_000,
+  DEFAULT_MAX_AUDIO_CHANNELS: 8,
   supportsDolby: jest.fn(() => false),
 }));
 
@@ -2207,6 +2209,23 @@ describe('PlayerScreen tracks', () => {
     afterEach(async () => {
       // The app-wide store outlives a test.
       await getSettingsStore().setAudioBehavior('direct');
+      await getSettingsStore().setMaxStreamingBitrate(100_000_000);
+    });
+
+    it('sends the saved bitrate cap, and none at the default', async () => {
+      await renderPaused();
+      expect(
+        jest.mocked(resolvePlayback).mock.calls.at(-1)![1],
+      ).not.toHaveProperty('maxStreamingBitrate');
+
+      await getSettingsStore().setMaxStreamingBitrate(3_000_000);
+      fireEvent.press(screen.getByTestId('player-overlay-audiomode'));
+      fireEvent.press(screen.getByTestId('player-audio-mode-picker-row-1'));
+      await flush();
+      expect(jest.mocked(resolvePlayback).mock.calls.at(-1)![1]).toMatchObject({
+        maxStreamingBitrate: 3_000_000,
+        maxAudioChannels: 2,
+      });
     });
 
     it('saves Downmix to stereo and resolves again with 2 channels', async () => {

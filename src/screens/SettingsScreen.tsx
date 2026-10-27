@@ -7,8 +7,14 @@ import {useSession} from '../auth/SessionContext';
 import {getAuthStore} from '../auth/store';
 import type {AuthStore, AutoLogin} from '../auth/store';
 import {FocusableButton} from '../components/FocusableButton';
+import {TrackPicker} from '../components/TrackPicker';
 import type {RootStackParamList} from '../navigation/types';
-import {AUDIO_BEHAVIORS, getSettingsStore} from '../settings/store';
+import {
+  AUDIO_BEHAVIORS,
+  MAX_BITRATES,
+  bitrateLabel,
+  getSettingsStore,
+} from '../settings/store';
 import type {AudioBehavior, SettingsStore} from '../settings/store';
 import {colors, spacing, typography} from '../theme';
 import {ScreenContainer} from './ScreenContainer';
@@ -25,6 +31,11 @@ export const autoLoginKey = (value: AutoLogin) =>
   value.mode === 'specificUser'
     ? `specificUser:${value.serverId}:${value.userId}`
     : value.mode;
+
+const BITRATE_TRACKS = MAX_BITRATES.map((bps, index) => ({
+  index,
+  label: bitrateLabel(bps),
+}));
 
 type SettingsScreenProps = {
   /** Injected in tests; the app uses the default stores. */
@@ -47,6 +58,14 @@ export const SettingsScreen = ({
   const [audioError, setAudioError] = useState<string>();
   // As for auto-login: only the latest save may revert the selection.
   const audioSaveCount = useRef(0);
+  const [maxBitrate, setMaxBitrate] = useState(
+    () => settings.current().maxStreamingBitrate,
+  );
+  const [bitrateError, setBitrateError] = useState<string>();
+  const bitrateSaveCount = useRef(0);
+  const [bitratePickerOpen, setBitratePickerOpen] = useState(false);
+  // Focus goes back to the button once the picker closes.
+  const [refocusBitrate, setRefocusBitrate] = useState(false);
 
   const [selected, setSelected] = useState<AutoLogin>();
   // A saved specificUser for someone other than the current user.
@@ -135,10 +154,11 @@ export const SettingsScreen = ({
       (loaded) => {
         if (!cancelled) {
           setAudioBehavior(loaded.audioBehavior);
+          setMaxBitrate(loaded.maxStreamingBitrate);
         }
       },
       (reason) => {
-        console.warn('Loading the audio setting failed', reason);
+        console.warn('Loading the playback settings failed', reason);
         if (!cancelled) {
           setAudioError("Couldn't load the setting.");
         }
@@ -166,6 +186,35 @@ export const SettingsScreen = ({
       }
     },
     [settings],
+  );
+
+  const closeBitratePicker = useCallback(() => {
+    setBitratePickerOpen(false);
+    setRefocusBitrate(true);
+  }, []);
+
+  const saveMaxBitrate = useCallback(
+    async (index: number) => {
+      closeBitratePicker();
+      const value = MAX_BITRATES[index];
+      if (value === undefined) {
+        return;
+      }
+      const save = ++bitrateSaveCount.current;
+      const previous = settings.current().maxStreamingBitrate;
+      setMaxBitrate(value);
+      setBitrateError(undefined);
+      try {
+        await settings.setMaxStreamingBitrate(value);
+      } catch (reason) {
+        console.warn('Saving the bitrate setting failed', reason);
+        if (mounted.current && save === bitrateSaveCount.current) {
+          setMaxBitrate(previous);
+          setBitrateError("Couldn't save the setting.");
+        }
+      }
+    },
+    [settings, closeBitratePicker],
   );
 
   const onSignOut = useCallback(async () => {
@@ -209,93 +258,124 @@ export const SettingsScreen = ({
   const selectedKey = selected && autoLoginKey(selected);
 
   return (
-    <ScreenContainer title="Settings" testID="settings-screen">
-      <Text style={styles.heading}>Account</Text>
+    <>
+      <ScreenContainer title="Settings" testID="settings-screen">
+        <Text style={styles.heading}>Account</Text>
 
-      {session ? (
-        <View style={styles.signedIn} testID="settings-signed-in">
-          <Text style={styles.label}>Signed in as</Text>
-          <Text
-            style={styles.userName}
-            numberOfLines={1}
-            testID="settings-user-name">
-            {session.user.Name}
-          </Text>
-          <Text
-            style={styles.server}
-            numberOfLines={1}
-            testID="settings-server">
-            {session.server.name} · {session.server.address}
-          </Text>
+        {session ? (
+          <View style={styles.signedIn} testID="settings-signed-in">
+            <Text style={styles.label}>Signed in as</Text>
+            <Text
+              style={styles.userName}
+              numberOfLines={1}
+              testID="settings-user-name">
+              {session.user.Name}
+            </Text>
+            <Text
+              style={styles.server}
+              numberOfLines={1}
+              testID="settings-server">
+              {session.server.name} · {session.server.address}
+            </Text>
+          </View>
+        ) : null}
+
+        <View style={styles.row}>
+          <FocusableButton
+            testID="settings-switch-user"
+            label="Switch user"
+            onPress={switchUser}
+          />
+          <View style={styles.gap} />
+          <FocusableButton
+            testID="settings-sign-out"
+            label={signingOut ? 'Signing out…' : 'Sign out'}
+            onPress={onSignOut}
+          />
         </View>
-      ) : null}
 
-      <View style={styles.row}>
-        <FocusableButton
-          testID="settings-switch-user"
-          label="Switch user"
-          onPress={switchUser}
+        <Text style={styles.label}>Auto-login</Text>
+        <View style={styles.row} testID="settings-auto-login">
+          {options.map((option, index) => (
+            <React.Fragment key={option.key}>
+              {index > 0 ? <View style={styles.gap} /> : null}
+              <FocusableButton
+                testID={`settings-auto-login-${option.value.mode}${
+                  option === otherUser ? '-other' : ''
+                }`}
+                label={option.label}
+                active={option.key === selectedKey}
+                onPress={() => saveAutoLogin(option.value)}
+              />
+            </React.Fragment>
+          ))}
+        </View>
+        {error ? (
+          <Text style={styles.error} testID="settings-error">
+            {error}
+          </Text>
+        ) : null}
+
+        <Text style={styles.heading}>Playback</Text>
+        <Text style={styles.label}>Audio</Text>
+        <View style={styles.row} testID="settings-audio">
+          {AUDIO_BEHAVIORS.map((option, index) => (
+            <React.Fragment key={option.value}>
+              {index > 0 ? <View style={styles.gap} /> : null}
+              <FocusableButton
+                testID={`settings-audio-${option.value}`}
+                label={option.label}
+                active={option.value === audioBehavior}
+                onPress={() => saveAudioBehavior(option.value)}
+              />
+            </React.Fragment>
+          ))}
+        </View>
+        {audioError ? (
+          <Text style={styles.error} testID="settings-audio-error">
+            {audioError}
+          </Text>
+        ) : null}
+
+        <Text style={styles.label}>Max streaming bitrate</Text>
+        <View style={styles.row}>
+          <FocusableButton
+            testID="settings-max-bitrate"
+            label={bitrateLabel(maxBitrate)}
+            hasTVPreferredFocus={refocusBitrate}
+            onPress={() => {
+              setRefocusBitrate(false);
+              setBitratePickerOpen(true);
+            }}
+          />
+        </View>
+        {bitrateError ? (
+          <Text style={styles.error} testID="settings-bitrate-error">
+            {bitrateError}
+          </Text>
+        ) : null}
+
+        <Text style={styles.heading}>About</Text>
+        <View style={styles.row}>
+          <FocusableButton
+            testID="settings-about"
+            label="About"
+            onPress={() => navigation.navigate('About')}
+          />
+        </View>
+      </ScreenContainer>
+      {/* Over the whole screen, not inside its scrolling content. */}
+      {bitratePickerOpen ? (
+        <TrackPicker
+          testID="settings-bitrate-picker"
+          title="Max streaming bitrate"
+          tracks={BITRATE_TRACKS}
+          selectedIndex={MAX_BITRATES.indexOf(maxBitrate)}
+          onSelect={saveMaxBitrate}
+          onClose={closeBitratePicker}
         />
-        <View style={styles.gap} />
-        <FocusableButton
-          testID="settings-sign-out"
-          label={signingOut ? 'Signing out…' : 'Sign out'}
-          onPress={onSignOut}
-        />
-      </View>
-
-      <Text style={styles.label}>Auto-login</Text>
-      <View style={styles.row} testID="settings-auto-login">
-        {options.map((option, index) => (
-          <React.Fragment key={option.key}>
-            {index > 0 ? <View style={styles.gap} /> : null}
-            <FocusableButton
-              testID={`settings-auto-login-${option.value.mode}${
-                option === otherUser ? '-other' : ''
-              }`}
-              label={option.label}
-              active={option.key === selectedKey}
-              onPress={() => saveAutoLogin(option.value)}
-            />
-          </React.Fragment>
-        ))}
-      </View>
-      {error ? (
-        <Text style={styles.error} testID="settings-error">
-          {error}
-        </Text>
       ) : null}
-
-      <Text style={styles.heading}>Playback</Text>
-      <Text style={styles.label}>Audio</Text>
-      <View style={styles.row} testID="settings-audio">
-        {AUDIO_BEHAVIORS.map((option, index) => (
-          <React.Fragment key={option.value}>
-            {index > 0 ? <View style={styles.gap} /> : null}
-            <FocusableButton
-              testID={`settings-audio-${option.value}`}
-              label={option.label}
-              active={option.value === audioBehavior}
-              onPress={() => saveAudioBehavior(option.value)}
-            />
-          </React.Fragment>
-        ))}
-      </View>
-      {audioError ? (
-        <Text style={styles.error} testID="settings-audio-error">
-          {audioError}
-        </Text>
-      ) : null}
-
-      <Text style={styles.heading}>About</Text>
-      <View style={styles.row}>
-        <FocusableButton
-          testID="settings-about"
-          label="About"
-          onPress={() => navigation.navigate('About')}
-        />
-      </View>
-    </ScreenContainer>
+    </>
   );
 };
 

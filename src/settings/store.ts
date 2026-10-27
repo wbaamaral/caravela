@@ -1,7 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type {KeyValueStorage} from '../auth/store';
-import {DEFAULT_MAX_AUDIO_CHANNELS} from '../playback/deviceProfile';
+import {
+  DEFAULT_MAX_AUDIO_CHANNELS,
+  DEFAULT_MAX_BITRATE,
+} from '../playback/deviceProfile';
 
 /**
  * The app's local settings (androidtv's `UserPreferences`), kept on the
@@ -20,13 +23,32 @@ export const AUDIO_BEHAVIORS: {value: AudioBehavior; label: string}[] = [
   {value: 'downmix', label: 'Downmix to stereo'},
 ];
 
+/**
+ * "Max streaming bitrate" choices, in bits per second, highest first (in the
+ * style of androidtv's quality presets). The server transcodes anything
+ * above it.
+ */
+export const MAX_BITRATES: number[] = [
+  120, 110, 100, 90, 80, 70, 60, 50, 40, 30, 20, 15, 10, 8, 6, 5, 4, 3, 2, 1.5,
+  1, 0.72, 0.42,
+].map((mbps) => Math.round(mbps * 1_000_000));
+
+/** "100 Mbps", "1.5 Mbps", "720 kbps". */
+export const bitrateLabel = (bps: number): string =>
+  bps >= 1_000_000 ? `${bps / 1_000_000} Mbps` : `${bps / 1000} kbps`;
+
 export interface Settings {
   audioBehavior: AudioBehavior;
+  /** In bits per second. */
+  maxStreamingBitrate: number;
 }
 
 export const STORAGE_KEY = 'caravela.settings.v1';
 
-export const DEFAULT_SETTINGS: Settings = {audioBehavior: 'direct'};
+export const DEFAULT_SETTINGS: Settings = {
+  audioBehavior: 'direct',
+  maxStreamingBitrate: DEFAULT_MAX_BITRATE,
+};
 
 /** The channel cap each behavior sends in the device profile. */
 export const maxAudioChannelsFor = (behavior: AudioBehavior): number =>
@@ -41,6 +63,7 @@ export interface SettingsStore {
    */
   current(): Settings;
   setAudioBehavior(audioBehavior: AudioBehavior): Promise<void>;
+  setMaxStreamingBitrate(maxStreamingBitrate: number): Promise<void>;
 }
 
 export function createSettingsStore(
@@ -75,18 +98,22 @@ export function createSettingsStore(
     return loading;
   };
 
+  const save = (patch: Partial<Settings>): Promise<void> => {
+    const result = queue.then(async () => {
+      const next: Settings = {...(await load()), ...patch};
+      await storage.setItem(STORAGE_KEY, JSON.stringify(next));
+      cache = next;
+    });
+    queue = result.catch(() => undefined);
+    return result;
+  };
+
   return {
     load,
     current: () => ({...(cache ?? DEFAULT_SETTINGS)}),
-    setAudioBehavior: (audioBehavior) => {
-      const result = queue.then(async () => {
-        const next: Settings = {...(await load()), audioBehavior};
-        await storage.setItem(STORAGE_KEY, JSON.stringify(next));
-        cache = next;
-      });
-      queue = result.catch(() => undefined);
-      return result;
-    },
+    setAudioBehavior: (audioBehavior) => save({audioBehavior}),
+    setMaxStreamingBitrate: (maxStreamingBitrate) =>
+      save({maxStreamingBitrate}),
   };
 }
 

@@ -372,4 +372,51 @@ describe('SettingsScreen audio behavior', () => {
       "Couldn't save the setting.",
     );
   });
+
+  it('shows the bitrate cap, 100 Mbps by default', async () => {
+    await renderWith(memorySettings().store);
+    expect(screen.getByText('Max streaming bitrate')).toBeTruthy();
+    expect(screen.getByTestId('settings-max-bitrate')).toHaveTextContent(
+      '100 Mbps',
+    );
+    expect(screen.queryByTestId('settings-bitrate-picker')).toBeNull();
+  });
+
+  it('picks a bitrate from the list, saves it and refocuses the button', async () => {
+    const {store} = memorySettings();
+    await renderWith(store);
+    await press('settings-max-bitrate');
+    expect(screen.getByTestId('settings-bitrate-picker')).toBeTruthy();
+    const labels = screen
+      .getAllByRole('radio')
+      .map((row) => row.props.accessibilityLabel);
+    expect(labels[0]).toBe('120 Mbps');
+    expect(labels).toContain('3 Mbps');
+    expect(labels.at(-1)).toBe('420 kbps');
+
+    const threeMbps = labels.indexOf('3 Mbps');
+    await press(`settings-bitrate-picker-row-${threeMbps}`);
+    expect(screen.queryByTestId('settings-bitrate-picker')).toBeNull();
+    expect(screen.getByTestId('settings-max-bitrate')).toHaveTextContent(
+      '3 Mbps',
+    );
+    expect(store.current().maxStreamingBitrate).toBe(3_000_000);
+    expect(
+      screen.getByTestId('settings-max-bitrate').props.hasTVPreferredFocus,
+    ).toBe(true);
+  });
+
+  it('reverts the bitrate and says so when saving fails', async () => {
+    const {storage, store} = memorySettings();
+    jest.mocked(storage.setItem).mockRejectedValue(new Error('disk full'));
+    await renderWith(store);
+    await press('settings-max-bitrate');
+    await press('settings-bitrate-picker-row-0');
+    expect(screen.getByTestId('settings-max-bitrate')).toHaveTextContent(
+      '100 Mbps',
+    );
+    expect(screen.getByTestId('settings-bitrate-error')).toHaveTextContent(
+      "Couldn't save the setting.",
+    );
+  });
 });

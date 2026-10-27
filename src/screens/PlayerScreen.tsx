@@ -29,7 +29,7 @@ import {TRACK_OFF_INDEX, TrackPicker} from '../components/TrackPicker';
 import {RootStackScreenProps} from '../navigation/types';
 import {watchAudioOutput} from '../playback/audioOutput';
 import {currentChapterIndex, itemChapters} from '../playback/chapters';
-import {supportsDolby} from '../playback/deviceProfile';
+import {DEFAULT_MAX_BITRATE, supportsDolby} from '../playback/deviceProfile';
 import {PlayerController, type PlayerState} from '../playback/PlayerController';
 import {type PlaybackRequest, resolvePlayback} from '../playback/resolver';
 import {trickplayInfo, trickplayTile} from '../playback/trickplay';
@@ -257,7 +257,8 @@ export const PlayerScreen = ({route, navigation}: PlayerProps) => {
     }
     let cancelled = false;
     setPhase({kind: 'resolving'});
-    const behavior = getSettingsStore().current().audioBehavior;
+    const {audioBehavior: behavior, maxStreamingBitrate} =
+      getSettingsStore().current();
     const request: PlaybackRequest = {
       itemId,
       userId,
@@ -266,6 +267,8 @@ export const PlayerScreen = ({route, navigation}: PlayerProps) => {
       ...(behavior === 'downmix' && {
         maxAudioChannels: maxAudioChannelsFor(behavior),
       }),
+      // The resolver's default otherwise.
+      ...(maxStreamingBitrate !== DEFAULT_MAX_BITRATE && {maxStreamingBitrate}),
     };
     const startPaused = startPausedRef.current;
     startPausedRef.current = false;
@@ -611,10 +614,7 @@ export const PlayerScreen = ({route, navigation}: PlayerProps) => {
     }
     // Not cumulative: a second switch during the resolve rewinds from the
     // same reported position.
-    resumeFromRef.current = Math.max(
-      0,
-      reportedRef.current - RELOAD_REWIND_MS,
-    );
+    resumeFromRef.current = Math.max(0, reportedRef.current - RELOAD_REWIND_MS);
     choiceRef.current = {
       mediaSourceId: next.session.mediaSourceId,
       ...(next.audioIndex !== undefined && {audioStreamIndex: next.audioIndex}),
