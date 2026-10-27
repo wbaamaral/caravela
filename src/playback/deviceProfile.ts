@@ -534,7 +534,10 @@ export function createDeviceProfile(
     AudioCodec: audioCodecs.join(','),
   });
 
-  const hlsVideoCodecs = [...(caps.hevc ? ['hevc'] : []), 'h264'].join(',');
+  // HEVC only in fMP4: Shaka transmuxes TS to MP4 under MSE and fails on HEVC
+  // in TS (it loads the playlist, never asks for a segment and stops).
+  const hlsVideoCodecs = (container: string): string =>
+    [...(caps.hevc && container !== 'ts' ? ['hevc'] : []), 'h264'].join(',');
   const hlsVideo = (
     container: string,
     audio: string[],
@@ -543,7 +546,7 @@ export function createDeviceProfile(
     Context: EncodingContext.Streaming,
     Protocol: MediaStreamProtocol.Hls,
     Container: container,
-    VideoCodec: hlsVideoCodecs,
+    VideoCodec: hlsVideoCodecs(container),
     AudioCodec: audio.filter((codec) => audioCodecs.includes(codec)).join(','),
     CopyTimestamps: false,
     // The app fetches text subtitles as WebVTT and draws them itself, so Shaka

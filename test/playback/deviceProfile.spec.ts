@@ -277,25 +277,26 @@ describe('buildDeviceProfile', () => {
       }
     });
 
-    it('offers HLS in TS and fMP4, with HEVC when supported', () => {
+    it('offers HLS in TS and fMP4, with HEVC in fMP4 only', () => {
       const profile = buildDeviceProfile({isTypeSupported: () => true});
       const [ts, fmp4, audio] = profile.TranscodingProfiles ?? [];
       const common = {
         Type: 'Video',
         Context: 'Streaming',
         Protocol: 'hls',
-        VideoCodec: 'hevc,h264',
         CopyTimestamps: false,
         EnableSubtitlesInManifest: false,
       };
       expect(ts).toEqual({
         ...common,
         Container: 'ts',
+        VideoCodec: 'h264',
         AudioCodec: 'aac,ac3,eac3,mp3',
       });
       expect(fmp4).toEqual({
         ...common,
         Container: 'mp4',
+        VideoCodec: 'hevc,h264',
         AudioCodec: 'aac,ac3,eac3,mp3,flac,opus,dts',
       });
       expect(audio).toEqual({
