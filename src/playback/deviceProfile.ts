@@ -18,7 +18,7 @@ import {VideoRangeType} from '@jellyfin/sdk/lib/generated-client/models/video-ra
 export const DEFAULT_MAX_BITRATE = 100_000_000;
 
 /** Up to 7.1; 2 makes the server downmix to stereo. */
-export const DEFAULT_MAX_AUDIO_CHANNELS = 8;
+export const DEFAULT_MAX_AUDIO_CHANNELS = 2;
 
 export type IsTypeSupported = (type: string) => boolean;
 
